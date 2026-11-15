@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMBERFALL — Keep the Campfire Burning</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #0b1026;
+    height: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #ffe9c4;
+  }
+  #game-canvas {
+    width: 960px;
+    height: 600px;
+    max-width: 96vw;
+    max-height: 86vh;
+    display: block;
+    border: 3px solid #ffb347;
+    border-radius: 8px;
+    background: #0b1026;
+    cursor: crosshair;
+  }
+  .caption {
+    margin-top: 10px;
+    font-family: sans-serif;
+    font-size: 14px;
+    color: #8fa0c8;
+    text-align: center;
+  }
+  .caption b { color: #ffe9c4; }
+</style>
+</head>
+<body>
+<canvas id="game-canvas" width="960" height="600"></canvas>
+<p class="caption"><b>EMBERFALL</b> — catch embers, dodge ice, keep the fire alive. Move: &larr; &rarr; / A D / mouse. Enter to start, R to restart, M to mute.</p>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
