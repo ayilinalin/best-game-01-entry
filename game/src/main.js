@@ -31,8 +31,28 @@ function buildGame(seed) {
     state: 'start',
     time: 0,
     floatingTexts: [],
+    particles: [],
+    banner: null,
+    stormWarning: 0,
     flash: 0,
   };
+}
+
+function spawnBurst(game, x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + game.time;
+    const speed = 60 + ((i * 37) % 90);
+    game.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 60,
+      life: 0.7,
+      maxLife: 0.7,
+      color,
+      size: 3 + ((i * 13) % 4),
+    });
+  }
+  if (game.particles.length > 120) game.particles.splice(0, game.particles.length - 120);
 }
 
 function addFloatingText(game, x, y, text, color) {
@@ -46,18 +66,22 @@ function applyCatch(game, item, sound) {
     feedFire(game.fire, CONFIG.firePerEmber);
     sound.playCatch(outcome.combo);
     addFloatingText(game, item.x, item.y - 14, `+${outcome.score}`, '#ffe9a8');
+    spawnBurst(game, item.x, item.y, '#ffb347', 10);
   } else if (outcome.type === 'golden') {
     feedFire(game.fire, CONFIG.firePerGoldenEmber);
     sound.playGolden();
     addFloatingText(game, item.x, item.y - 14, `GOLD +${outcome.score}`, '#ffd700');
+    spawnBurst(game, item.x, item.y, '#ffd700', 16);
   } else if (outcome.type === 'shield') {
     grantShield(game.fire);
     sound.playPowerup();
     addFloatingText(game, item.x, item.y - 14, 'ICE SHIELD!', '#7fd4ff');
+    spawnBurst(game, item.x, item.y, '#7fd4ff', 12);
   } else if (outcome.type === 'slow') {
     grantSlow(game.fire);
     sound.playPowerup();
     addFloatingText(game, item.x, item.y - 14, 'TIME SLOWS!', '#c9a7ff');
+    spawnBurst(game, item.x, item.y, '#c9a7ff', 12);
   } else if (outcome.type === 'ice') {
     const result = hitByIce(game.fire);
     if (result === 'blocked') {
@@ -79,6 +103,8 @@ function stepSimulation(game, sound) {
     if (event.type === 'levelup') {
       sound.playLevelUp();
       addFloatingText(game, CONFIG.canvasWidth / 2, 200, `LEVEL ${event.level} — THE NIGHT DEEPENS`, '#ffb347');
+      game.banner = { text: `LEVEL ${event.level} — THE NIGHT DEEPENS`, life: 2.4 };
+      if (event.level >= 3) game.stormWarning = 2.4;
     }
   }
   drainFire(fire, FIXED_STEP);
@@ -103,6 +129,18 @@ function stepSimulation(game, sound) {
     text.life -= FIXED_STEP * 0.9;
   }
   game.floatingTexts = game.floatingTexts.filter((text) => text.life > 0);
+  for (const p of game.particles) {
+    p.x += p.vx * FIXED_STEP;
+    p.y += p.vy * FIXED_STEP;
+    p.vy += 260 * FIXED_STEP;
+    p.life -= FIXED_STEP;
+  }
+  game.particles = game.particles.filter((p) => p.life > 0);
+  if (game.banner) {
+    game.banner.life -= FIXED_STEP;
+    if (game.banner.life <= 0) game.banner = null;
+  }
+  if (game.stormWarning > 0) game.stormWarning = Math.max(0, game.stormWarning - FIXED_STEP);
   if (game.flash > 0) game.flash = Math.max(0, game.flash - FIXED_STEP);
   if (isFireOut(fire)) {
     game.state = 'gameover';
@@ -116,6 +154,9 @@ function startGame(game, sound) {
   game.fire = fresh.fire;
   game.world = fresh.world;
   game.floatingTexts = [];
+  game.particles = [];
+  game.banner = null;
+  game.stormWarning = 0;
   game.flash = 0;
   game.state = 'playing';
   sound.unlockAudio();
@@ -131,43 +172,66 @@ function stageShotScene(game, mode) {
     game.world.elapsed = 47;
     game.world.level = 2;
     game.world.score = 480;
-    game.world.combo = 5;
-    game.world.bestCombo = 9;
+    game.world.combo = 18;
+    game.world.bestCombo = 18;
     game.world.caught = 41;
     game.fire.fuel = 72;
     game.fire.lives = 3;
     game.player.x = 470;
+    // A dense action moment: embers everywhere, a golden one dropping in,
+    // ice closing from both sides, the bearer mid-catch.
     game.world.items = [
-      { kind: 'ember', x: 300, y: 180, speed: 180, drift: 8, radius: 11, wobble: 0.5 },
-      { kind: 'ember', x: 470, y: 320, speed: 180, drift: -6, radius: 11, wobble: 1.2 },
-      { kind: 'ember', x: 620, y: 120, speed: 180, drift: 10, radius: 11, wobble: 2.1 },
-      { kind: 'ice', x: 720, y: 240, speed: 190, drift: -8, radius: 13, wobble: 0.9 },
-      { kind: 'ice', x: 180, y: 300, speed: 190, drift: 6, radius: 13, wobble: 2.6 },
-      { kind: 'ember', x: 820, y: 90, speed: 180, drift: -10, radius: 11, wobble: 1.7 },
+      { kind: 'ember', x: 300, y: 180, speed: 180, drift: 8, radius: 16, wobble: 0.5 },
+      { kind: 'ember', x: 470, y: 320, speed: 180, drift: -6, radius: 16, wobble: 1.2 },
+      { kind: 'ember', x: 620, y: 120, speed: 180, drift: 10, radius: 16, wobble: 2.1 },
+      { kind: 'ember', x: 820, y: 90, speed: 180, drift: -10, radius: 16, wobble: 1.7 },
+      { kind: 'ember', x: 380, y: 90, speed: 180, drift: 6, radius: 16, wobble: 0.3 },
+      { kind: 'ember', x: 540, y: 210, speed: 180, drift: -8, radius: 16, wobble: 2.8 },
+      { kind: 'ember', x: 700, y: 380, speed: 180, drift: 4, radius: 16, wobble: 1.5 },
+      { kind: 'ember', x: 220, y: 420, speed: 180, drift: -4, radius: 16, wobble: 2.4 },
+      { kind: 'golden', x: 580, y: 60, speed: 170, drift: 0, radius: 18, wobble: 0.8 },
+      { kind: 'ice', x: 720, y: 240, speed: 190, drift: -8, radius: 17, wobble: 0.9 },
+      { kind: 'ice', x: 180, y: 300, speed: 190, drift: 6, radius: 17, wobble: 2.6 },
+      { kind: 'ice', x: 860, y: 300, speed: 190, drift: -6, radius: 17, wobble: 1.1 },
     ];
-    addFloatingText(game, 470, 300, '+20', '#ffe9a8');
+    addFloatingText(game, 470, 300, '+40', '#ffe9a8');
+    addFloatingText(game, 380, 130, '+40', '#ffe9a8');
+    spawnBurst(game, 470, 330, '#ffb347', 10);
+    spawnBurst(game, 540, 220, '#ffb347', 8);
     return;
   }
   if (mode === 'powerup') {
     game.world.elapsed = 96;
     game.world.level = 4;
     game.world.score = 1240;
-    game.world.combo = 12;
-    game.world.bestCombo = 12;
+    game.world.combo = 24;
+    game.world.bestCombo = 24;
     game.world.caught = 88;
     game.world.goldenCaught = 3;
     game.fire.fuel = 88;
     game.fire.lives = 2;
     game.fire.shieldSecondsLeft = 6;
+    game.fire.slowSecondsLeft = 5;
     game.player.x = 520;
+    game.banner = { text: 'LEVEL 4 — THE NIGHT DEEPENS', life: 99 };
+    game.stormWarning = 0;
+    // Shield + slow-time active together, golden embers raining, storm warning up.
     game.world.items = [
-      { kind: 'golden', x: 520, y: 300, speed: 170, drift: 0, radius: 13, wobble: 0.4 },
-      { kind: 'golden', x: 380, y: 150, speed: 170, drift: 8, radius: 13, wobble: 1.9 },
-      { kind: 'ember', x: 660, y: 200, speed: 180, drift: -8, radius: 11, wobble: 1.1 },
-      { kind: 'ice', x: 760, y: 320, speed: 190, drift: -6, radius: 13, wobble: 2.2 },
-      { kind: 'ember', x: 240, y: 260, speed: 180, drift: 6, radius: 11, wobble: 0.7 },
+      { kind: 'golden', x: 520, y: 300, speed: 170, drift: 0, radius: 18, wobble: 0.4 },
+      { kind: 'golden', x: 380, y: 150, speed: 170, drift: 8, radius: 18, wobble: 1.9 },
+      { kind: 'golden', x: 660, y: 90, speed: 170, drift: -6, radius: 18, wobble: 2.5 },
+      { kind: 'ember', x: 660, y: 200, speed: 180, drift: -8, radius: 16, wobble: 1.1 },
+      { kind: 'ember', x: 240, y: 260, speed: 180, drift: 6, radius: 16, wobble: 0.7 },
+      { kind: 'ember', x: 440, y: 110, speed: 180, drift: -6, radius: 16, wobble: 1.6 },
+      { kind: 'ember', x: 760, y: 170, speed: 180, drift: 8, radius: 16, wobble: 0.2 },
+      { kind: 'ice', x: 760, y: 320, speed: 190, drift: -6, radius: 17, wobble: 2.2 },
+      { kind: 'ice', x: 180, y: 360, speed: 190, drift: 6, radius: 17, wobble: 1.4 },
+      { kind: 'slow', x: 860, y: 430, speed: 150, drift: 4, radius: 18, wobble: 0.6 },
     ];
-    addFloatingText(game, 520, 280, 'GOLD +90', '#ffd700');
+    addFloatingText(game, 520, 280, 'GOLD +150', '#ffd700');
+    addFloatingText(game, 380, 130, 'GOLD +150', '#ffd700');
+    spawnBurst(game, 520, 310, '#ffd700', 16);
+    spawnBurst(game, 380, 160, '#ffd700', 12);
     return;
   }
   if (mode === 'gameover') {
@@ -187,13 +251,58 @@ function stageShotScene(game, mode) {
 
 function drawFloatingTexts(ctx, game) {
   ctx.textAlign = 'center';
-  ctx.font = 'bold 18px sans-serif';
+  ctx.font = 'bold 22px sans-serif';
   for (const text of game.floatingTexts) {
     ctx.globalAlpha = Math.max(0, Math.min(1, text.life));
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeText(text.text, text.x, text.y);
     ctx.fillStyle = text.color;
     ctx.fillText(text.text, text.x, text.y);
   }
   ctx.globalAlpha = 1;
+}
+
+function drawParticles(ctx, game) {
+  for (const p of game.particles) {
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBanners(ctx, game) {
+  // Level-up banner: big gold strip across the middle of the sky.
+  if (game.banner) {
+    const alpha = Math.min(1, game.banner.life);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = 'bold 26px sans-serif';
+    const width = ctx.measureText(game.banner.text).width + 48;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(CONFIG.canvasWidth / 2 - width / 2, 210, width, 44);
+    ctx.strokeStyle = '#ffb347';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(CONFIG.canvasWidth / 2 - width / 2, 210, width, 44);
+    ctx.fillStyle = '#ffb347';
+    ctx.textAlign = 'center';
+    ctx.fillText(game.banner.text, CONFIG.canvasWidth / 2, 241);
+    ctx.restore();
+  }
+  // Ice-storm warning: flashing red-white strip above the banner.
+  if (game.stormWarning > 0) {
+    const blink = Math.sin(game.time * 8) > 0 ? 1 : 0.55;
+    ctx.save();
+    ctx.globalAlpha = blink;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = '#ff5a6e';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠  ICE STORM INCOMING  ⚠', CONFIG.canvasWidth / 2, 200);
+    ctx.restore();
+  }
 }
 
 export function bootEmberfall() {
@@ -252,7 +361,9 @@ export function bootEmberfall() {
       renderGameOverScreen(ctx, game.world, game.time);
     } else {
       renderWorld(ctx, game.world, game.player, game.fire, game.time);
+      drawParticles(ctx, game);
       drawFloatingTexts(ctx, game);
+      drawBanners(ctx, game);
       if (game.flash > 0) {
         ctx.fillStyle = `rgba(160,210,255,${game.flash * 0.5})`;
         ctx.fillRect(0, 0, CONFIG.canvasWidth, CONFIG.canvasHeight);

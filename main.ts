@@ -1,35 +1,35 @@
-// EMBERFALL — entry program for the make.fun best-game-01 bounty.
+// EMBERFALL v2 — entry program for make.fun best-game-01.
 // Copies game/ and screenshots/ from this repository into the output
-// directory and writes /output/dossier.json with buildDossier from
-// vendor/makefun-game.ts. Standard library only; deterministic: two runs
-// write byte-identical output.
+// directory and writes /output/dossier.json with buildDossier from the
+// kit's vendor/makefun-game.ts, exactly as the gate rebuilds it.
+import { buildDossier } from './vendor/makefun-game.ts';
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildDossier } from './vendor/makefun-game.ts';
 
-const repoRoot = dirname(fileURLToPath(import.meta.url));
-const outputDir = process.env.MAKEFUN_OUTPUT_DIR?.trim() ? process.env.MAKEFUN_OUTPUT_DIR : '/output';
+const REPO_ROOT = dirname(fileURLToPath(import.meta.url));
+const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR || '/output';
 
-function copyTree(name: string): void {
-  const source = join(repoRoot, name);
-  const target = join(outputDir, name);
-  if (!existsSync(source)) throw new Error(`missing ${name}/ in repository`);
-  cpSync(source, target, { recursive: true });
+function main(): void {
+  for (const sub of ['game', 'screenshots']) {
+    if (!existsSync(join(REPO_ROOT, sub))) {
+      throw new Error(`EMBERFALL v2: missing ${join(REPO_ROOT, sub)} — refusing to write an empty entry`);
+    }
+  }
+  if (existsSync(OUTPUT_DIR)) rmSync(OUTPUT_DIR, { recursive: true, force: true });
+  mkdirSync(OUTPUT_DIR, { recursive: true });
+  cpSync(join(REPO_ROOT, 'game'), join(OUTPUT_DIR, 'game'), { recursive: true });
+  cpSync(join(REPO_ROOT, 'screenshots'), join(OUTPUT_DIR, 'screenshots'), { recursive: true });
+  const dossier = buildDossier(OUTPUT_DIR, {
+    text_max_bytes: 163840,
+    screenshots: { max: 4, max_bytes: 262144 },
+    game_max_files: 993,
+    game_max_bytes: 48 * 1024 * 1024,
+    game_path_max_bytes: 1000,
+  });
+  writeFileSync(join(OUTPUT_DIR, 'dossier.json'), dossier);
+  if (dossier.length === 0) throw new Error('EMBERFALL v2: buildDossier wrote 0 bytes');
+  console.log(`EMBERFALL v2: wrote ${join(OUTPUT_DIR, 'dossier.json')} (${dossier.length} bytes)`);
 }
 
-mkdirSync(outputDir, { recursive: true });
-rmSync(join(outputDir, 'game'), { recursive: true, force: true });
-rmSync(join(outputDir, 'screenshots'), { recursive: true, force: true });
-rmSync(join(outputDir, 'dossier.json'), { force: true });
-copyTree('game');
-copyTree('screenshots');
-
-const dossier = buildDossier(outputDir, {
-  text_max_bytes: 163840,
-  screenshots: { max: 4, max_bytes: 262144 },
-  game_max_files: 993,
-  game_max_bytes: 50331648,
-});
-writeFileSync(join(outputDir, 'dossier.json'), dossier);
-console.log(`EMBERFALL entry written to ${outputDir} (${dossier.length} byte dossier)`);
+main();
